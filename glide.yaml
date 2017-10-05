@@ -55,3 +55,5 @@ import:
   version: ^v1.8.36
 - package: github.com/prometheus/client_golang
   version: ~0.8.0
+- package: github.com/janeczku/go-ipset
+  version: ~0.1.0

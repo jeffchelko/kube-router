@@ -140,6 +140,8 @@ imports:
   - client/v2
   - models
   - pkg/escape
+- name: github.com/janeczku/go-ipset
+  version: aea1e2c26cde566a44b17ce781f9104776aa15da
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
 - name: github.com/juju/ratelimit

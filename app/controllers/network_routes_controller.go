@@ -23,6 +23,7 @@ import (
 	"github.com/cloudnativelabs/kube-router/utils"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/golang/glog"
+	"github.com/janeczku/go-ipset/ipset"
 	bgpapi "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet/bgp"
@@ -52,7 +53,7 @@ type NetworkRoutingController struct {
 	globalPeerRouters    []*config.NeighborConfig
 	nodePeerRouters      []string
 	bgpFullMeshMode      bool
-	ipSetHandler         *utils.IPSet
+	ipsets               map[string]*ipset.IPSet
 	enableOverlays       bool
 }
 
@@ -738,16 +739,12 @@ func (nrc *NetworkRoutingController) Cleanup() {
 }
 
 func deletePodSubnetIpSet() error {
-	ipset, err := utils.NewIPSet()
+	set, err := ipset.New(podSubnetsIPSetName, utils.TypeHashNet, ipset.Params{})
 	if err != nil {
 		return err
 	}
 
-	ipset.Sets = append(ipset.Sets, &utils.Set{
-		Name: podSubnetsIPSetName,
-	})
-
-	err = ipset.Destroy()
+	err = set.Destroy()
 	if err != nil {
 		return errors.New("Failure deleting Pod egress ipset: " + err.Error())
 	}
@@ -756,16 +753,12 @@ func deletePodSubnetIpSet() error {
 }
 
 func deleteNodeAddrIPSet() error {
-	ipset, err := utils.NewIPSet()
+	set, err := ipset.New(nodeAddrsIPSetName, utils.TypeHashIP, ipset.Params{})
 	if err != nil {
 		return err
 	}
 
-	ipset.Sets = append(ipset.Sets, &utils.Set{
-		Name: nodeAddrsIPSetName,
-	})
-
-	err = ipset.Destroy()
+	err = set.Destroy()
 	if err != nil {
 		return errors.New("Failure deleting Pod egress ipset: " + err.Error())
 	}
@@ -835,47 +828,14 @@ func (nrc *NetworkRoutingController) syncNodeIPSets() error {
 		currentNodeIPs = append(currentNodeIPs, nodeIP.String())
 	}
 
-	err = nrc.createRefreshPermanentIPSet(podSubnetsIPSetName, utils.TypeHashNet, currentPodCidrs)
+	err = nrc.ipsets[podSubnetsIPSetName].Refresh(currentPodCidrs)
 	if err != nil {
-		return fmt.Errorf("Failed to create/update Pod subnet ipset: %s", err)
+		return fmt.Errorf("Failed to update Pod subnet ipset: %s", err)
 	}
 
-	err = nrc.createRefreshPermanentIPSet(nodeAddrsIPSetName, utils.TypeHashIP, currentNodeIPs)
+	err = nrc.ipsets[nodeAddrsIPSetName].Refresh(currentNodeIPs)
 	if err != nil {
-		return fmt.Errorf("Failed to create/update Node IPs ipset: %s", err)
-	}
-
-	return nil
-}
-
-func (nrc *NetworkRoutingController) createRefreshPermanentIPSet(name string,
-	setType string, entries []string) error {
-	var err error
-	if nrc.ipSetHandler.Get(name) == nil {
-		glog.Infof("ipset set \"%s\" not found. Creating.", name)
-
-		_, err = nrc.ipSetHandler.Create(name, setType, utils.OptionTimeout, "0")
-		if err != nil {
-			return fmt.Errorf("Failed to create ipset set called \"%s\": %s",
-				name, err.Error())
-		}
-		nrc.ipSetHandler.Save()
-	}
-
-	// Debug
-	if len(nrc.ipSetHandler.Sets) == 0 {
-		return fmt.Errorf("Something went wrong. nrc ipset set slice is empty")
-	}
-	for _, set := range nrc.ipSetHandler.Sets {
-		if set.IPSet == nil {
-			return fmt.Errorf("Something went wrong. nrc set %s has no IPSet pointer.", set.Name)
-		}
-	}
-
-	err = nrc.ipSetHandler.Get(name).Refresh(entries, utils.OptionTimeout, "0")
-	if err != nil {
-		return fmt.Errorf("Failed to update entries in ipset set called \"%s\": %s",
-			name, err.Error())
+		return fmt.Errorf("Failed to update Node IPs ipset: %s", err)
 	}
 
 	return nil
@@ -1313,9 +1273,16 @@ func NewNetworkRoutingController(clientset *kubernetes.Clientset,
 	nrc.clientset = clientset
 
 	var err error
-	nrc.ipSetHandler, err = utils.NewIPSet()
+	nrc.ipsets[podSubnetsIPSetName], err = ipset.New(podSubnetsIPSetName,
+		utils.TypeHashNet, ipset.Params{Timeout: 0})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to create ipset: %s", err)
+	}
+
+	nrc.ipsets[nodeAddrsIPSetName], err = ipset.New(nodeAddrsIPSetName,
+		utils.TypeHashIP, ipset.Params{Timeout: 0})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create ipset: %s", err)
 	}
 
 	if kubeRouterConfig.EnablePodEgress || len(nrc.clusterCIDR) != 0 {
