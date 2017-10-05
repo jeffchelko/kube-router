@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/coreos/go-semver/semver"
+	log "github.com/sirupsen/logrus"
 )
 
 const minIpsetVersion = "6.0.0"
@@ -108,7 +108,7 @@ func New(name string, hashtype string, p Params) (*IPSet, error) {
 		p.HashFamily = "inet"
 	}
 
-	// Check if hashtype is a type of hash 
+	// Check if hashtype is a type of hash
 	if !strings.HasPrefix(hashtype, "hash:") {
 		return nil, fmt.Errorf("not a hash type: %s", hashtype)
 	}

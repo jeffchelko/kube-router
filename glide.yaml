@@ -56,4 +56,8 @@ import:
 - package: github.com/prometheus/client_golang
   version: ~0.8.0
 - package: github.com/janeczku/go-ipset
-  version: ~0.1.0
+  repo: git@github.com:/bzub/go-ipset
+  vcs: git
+  version: master
+  subpackages:
+    - ipset

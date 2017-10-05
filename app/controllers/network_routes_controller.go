@@ -1273,6 +1273,7 @@ func NewNetworkRoutingController(clientset *kubernetes.Clientset,
 	nrc.clientset = clientset
 
 	var err error
+	nrc.ipsets = make(map[string]*ipset.IPSet)
 	nrc.ipsets[podSubnetsIPSetName], err = ipset.New(podSubnetsIPSetName,
 		utils.TypeHashNet, ipset.Params{Timeout: 0})
 	if err != nil {
